@@ -144,16 +144,22 @@ class Real(unittest.TestCase):
 
     @unittest.skipUnless(tool_python(), 'needs a python with debugpy (RHUN_TEST_PYTHON)')
     def test_python_in_the_project_venv_and_the_terminal(self):
+        # the project's .venv: the debugpy interpreter's own environment, or one made on it
+        python = Path(tool_python())
+        home = python.parent.parent
+        if (home / 'pyvenv.cfg').exists():
+            (self.proj / '.venv').symlink_to(home)
+        else:
+            subprocess.run([str(python), '-m', 'venv', '--system-site-packages', str(self.proj / '.venv')], check=True)
         venv = self.proj / '.venv/bin'
-        venv.mkdir(parents=True)
-        (venv / 'python').symlink_to(tool_python())
         (self.proj / 'ask.py').write_text("import sys\nname = input('name? ')\nprint('hello', name, sys.executable)\n")
         (self.proj / '.rhun/launch.ini').write_text('[Current file]\ntype = python\nprogram = ${file}\n')
         out = self.run_rhun(['ask.py'], ['wait 300', 'debug-start Current file', 'wait 3000', 'dialog yes',
                                          'wait-term name?', 'type rhun', 'key Return', 'wait-term hello rhun',
                                          'wait-debug ended 30000', 'print-term', 'print-debug'])
         self.assertTrue(any('hello rhun' in l for l in out), out)
-        self.assertTrue(any(str(venv / 'python') in l for l in ''.join(out).split('hello rhun ')[1:]), out)
+        # the program ran in the project's environment (lines wrap at the terminal's width)
+        self.assertIn('hello rhun ' + str(Path(os.path.realpath(venv)) / 'python'), ''.join(out))
         self.assertEqual(self.field(self.sessions(out)[0], 'exit'), '0', out)
 
     @unittest.skipUnless(tool_lldb(), 'needs cc and lldb-dap')
