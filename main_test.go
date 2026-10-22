@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/rhun-editor/extension-protocol/go/rhunext"
@@ -23,12 +24,19 @@ func TestTestAt(t *testing.T) {
 func TestResolveGo(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module x\n"), 0o644)
-	d := &debug{project: dir}
+	os.MkdirAll(filepath.Join(dir, "cmd", "app"), 0o755)
+	d := &debug{project: filepath.ToSlash(dir)} // the paths as rhun writes them (C:/... on Windows)
 	var c rhunext.DebugConfig
 	c.Set("type", rhunext.DebugStr("go"))
 	out, err := d.resolveGo(nil, rhunext.DebugResolveRequest{Type: "go", Request: "launch", Config: c,
-		Path: filepath.Join(dir, "a_test.go")})
-	if err != nil || out.String("program") != dir || out.String("mode") != "test" {
+		Path: filepath.ToSlash(filepath.Join(dir, "a_test.go"))})
+	if err != nil || out.String("program") != filepath.ToSlash(dir) || out.String("mode") != "test" {
+		t.Fatalf("%v %v", out, err)
+	}
+	// a package below the module's folder: go.mod is found above it
+	out, err = d.resolveGo(nil, rhunext.DebugResolveRequest{Type: "go", Request: "launch", Config: c,
+		Path: filepath.ToSlash(filepath.Join(dir, "cmd", "app", "main.go"))})
+	if err != nil || out.String("program") != filepath.ToSlash(filepath.Join(dir, "cmd", "app")) || out.String("mode") != "debug" {
 		t.Fatalf("%v %v", out, err)
 	}
 	c.Set("program", rhunext.DebugStr(t.TempDir()))
@@ -39,13 +47,17 @@ func TestResolveGo(t *testing.T) {
 
 func TestResolvePython(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".venv", "bin"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".venv", "bin", "python"), nil, 0o755)
-	d := &debug{project: dir}
+	py := filepath.Join(dir, ".venv", "bin", "python")
+	if runtime.GOOS == "windows" {
+		py = filepath.Join(dir, ".venv", "Scripts", "python.exe")
+	}
+	os.MkdirAll(filepath.Dir(py), 0o755)
+	os.WriteFile(py, nil, 0o755)
+	d := &debug{project: filepath.ToSlash(dir)}
 	var c rhunext.DebugConfig
 	c.Set("type", rhunext.DebugStr("python"))
 	out, _ := d.resolvePython(rhunext.DebugResolveRequest{Config: c})
-	if out.String("python") != filepath.Join(dir, ".venv", "bin", "python") || out.String("console") != "integratedTerminal" {
+	if out.String("python") != filepath.ToSlash(py) || out.String("console") != "integratedTerminal" {
 		t.Fatalf("%v", out)
 	}
 	c.Set("console", rhunext.DebugStr("internalConsole"))

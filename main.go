@@ -49,7 +49,7 @@ func (d *debug) resolveGo(ext *rhunext.Ext, req rhunext.DebugResolveRequest) (rh
 	if program == "" {
 		switch {
 		case req.Path != "":
-			program = filepath.Dir(req.Path)
+			program = wire(filepath.Dir(req.Path))
 		case d.project != "":
 			program = d.project
 		default:
@@ -62,7 +62,7 @@ func (d *debug) resolveGo(ext *rhunext.Ext, req rhunext.DebugResolveRequest) (rh
 		dir = filepath.Dir(program)
 	}
 	if req.Request == "launch" && !d.inModule(dir) {
-		return nil, errors.New("no Go module (go.mod) in " + dir + " or above it")
+		return nil, errors.New("no Go module (go.mod) in " + wire(dir) + " or above it")
 	}
 	if c.String("mode") == "" {
 		mode := "debug"
@@ -111,14 +111,20 @@ func testAt(text string, line int) string {
 	return ""
 }
 
-// inModule: a go.mod in dir or a folder above it, up to the project's root
+// inModule: a go.mod in dir or a folder above it, up to the project's root (both cleaned: rhun's
+// C:/w/app is C:\w\app like the folders filepath.Dir gives on Windows)
 func (d *debug) inModule(dir string) bool {
+	dir = filepath.Clean(dir)
+	project := ""
+	if d.project != "" {
+		project = filepath.Clean(d.project)
+	}
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return true
 		}
 		up := filepath.Dir(dir)
-		if up == dir || (d.project != "" && !strings.HasPrefix(up, d.project)) {
+		if up == dir || (project != "" && !strings.HasPrefix(up, project)) {
 			return false
 		}
 		dir = up
@@ -156,7 +162,7 @@ func (d *debug) python(fallback string) string {
 		for _, env := range []string{".venv", "venv"} {
 			p := filepath.Join(d.project, env, rel)
 			if _, err := os.Stat(p); err == nil {
-				return p
+				return wire(p)
 			}
 		}
 	}
@@ -164,6 +170,12 @@ func (d *debug) python(fallback string) string {
 		return fallback
 	}
 	return "python3"
+}
+
+// wire is a path as rhun writes and expects it: forward slashes on Windows too (C:/w/app). The
+// paths the extension puts in a configuration go through it; the paths rhun sends are used as given.
+func wire(p string) string {
+	return filepath.ToSlash(p)
 }
 
 func main() {
