@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The extension in rhun for real, headless: Delve on a Go test at the cursor after a prelaunch
 build task (launch.ini's before), debugpy in the project's virtual environment with the program
-in rhun's terminal, and lldb-dap on a C program. usage: tests/real.py RHUN
+in rhun's terminal, and lldb-dap on a C program. usage: tests/real.py RHUN (tests/run.sh runs it)
 
 Each workflow is skipped with the reason when its tool is missing: dlv (on PATH or RHUN_TEST_DLV),
 a python with debugpy in RHUN_TEST_PYTHON (linked as the project's .venv), cc and lldb-dap."""
@@ -63,8 +63,8 @@ class Real(unittest.TestCase):
         exe = 'debug-' + TARGET + ('.exe' if TARGET.startswith('windows') else '')
         subprocess.run(['go', 'build', '-o', str(ext / 'bin' / exe), '.'], cwd=ROOT, check=True,
                        env=dict(os.environ, CGO_ENABLED='0'))
-        shutil.copy(ROOT / 'extension.ini', ext)
-        shutil.copytree(ROOT / 'debug', ext / 'debug')
+        # what the release ships: the manifest, the icon, the templates in debug/ (tests/layout.sh)
+        subprocess.run(['sh', str(ROOT / 'tests/layout.sh'), str(ext)], check=True)
         driver = cls.exts / 't/tasks'
         driver.mkdir(parents=True)
         (driver / 'extension.ini').write_text('name = tasks\nowner = t\ntitle = Tasks\nversion = 1\nprotocol = 1\n'
@@ -119,6 +119,8 @@ class Real(unittest.TestCase):
             '[Test at cursor]\ntype = go\nmode = test\nprogram = ${fileDir}\ntestAtCursor = yes\n'
             'args = -test.v\nbefore = build\n')
         out = self.run_rhun(['calc_test.go'], [
+            # the task provider (t/tasks) has sent its build task before the launch asks for it
+            'wait-ext tasks running', 'wait 500',
             'wait 300', 'key ctrl+g', 'type 6', 'key Return', 'bp %s 4' % (self.proj / 'calc.go'),
             'debug-start Test at cursor', 'wait 800', 'print-dialog', 'dialog yes',     # the task provider
             'wait 8000', 'print-dialog', 'dialog yes',                                   # the Debug extension

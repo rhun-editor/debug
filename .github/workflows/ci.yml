@@ -1,0 +1,42 @@
+# Vet and test on the three systems rhun runs on; the conformance checker and the headless test
+# (real debugging with Delve and debugpy) against the latest rhun on Linux.
+name: ci
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: go vet ./... && go test ./... && go build ./...
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Conformance checker
+        run: sh tests/check.sh
+      - name: rhun
+        run: curl -fsSL https://github.com/vshvedov/rhun/releases/latest/download/install.sh | sh
+      - name: Delve and debugpy
+        run: |
+          go install github.com/go-delve/delve/cmd/dlv@latest
+          python3 -m venv "$RUNNER_TEMP/py" && "$RUNNER_TEMP/py/bin/pip" install -q debugpy
+      - name: Headless test
+        run: |
+          # extensions came with rhun 0.18.0 (debuggers too)
+          v=$("$HOME/.local/bin/rhun" --version | sed 's/^rhun //')
+          case "$v" in 0.[0-9].*|0.1[0-7].*) echo "rhun $v has no extensions: the headless test needs 0.18.0"; exit 0 ;; esac
+          PATH="$(go env GOPATH)/bin:$PATH" RHUN_TEST_PYTHON="$RUNNER_TEMP/py/bin/python" sh tests/run.sh "$HOME/.local/bin/rhun"

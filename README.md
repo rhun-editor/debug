@@ -17,6 +17,16 @@ them (`[debugger.TYPE]` in extension.ini) and prepares launches (feature `debug`
 Templates for `.rhun/launch.ini` are in `debug/`. **Debug: Install Delve** proposes the
 `go install` command in the terminal.
 
+Install it from rhun: the extensions button in the title bar, **Install from GitHub…**, then
+`rhun-editor/debug`. It needs rhun 0.18 (protocol 1.1, feature `debug`) and the debuggers
+themselves: `dlv`, `debugpy` in the Python you debug with, and `lldb-dap` (Xcode's command line
+tools on macOS, LLVM's `lldb-dap` on Linux and Windows).
+
+## Settings
+
+None of its own: a launch configuration's attributes (`.rhun/launch.ini`) choose the program,
+arguments, environment and, for Python, the interpreter (`python = PATH`).
+
 ## Needs
 
 Debug (the adapters run as you after rhun's one approval per project), documents and project
@@ -25,11 +35,14 @@ terminal (the install commands).
 
 ## Build and test
 
-`go test ./...` covers the resolver. `python3 tests/real.py RHUN` builds the extension, lays it out
-as rhun installs it, and debugs for real, headless: a Go test at the cursor after a prelaunch
-build task, a Python program reading input in the terminal, and a C program. Each workflow is
-skipped when its tool is missing (dlv or `RHUN_TEST_DLV`; a python with debugpy in
-`RHUN_TEST_PYTHON`; cc and lldb-dap).
+```sh
+go test ./...           # the resolver
+tests/run.sh [RHUN]     # headless, debugging for real (python3)
+tests/check.sh          # the protocol's conformance checker
+```
 
-The debug feature is on the extension-protocol SDK's `parity-debugger` branch until it is
-released; go.mod points at a local checkout of it meanwhile.
+`tests/run.sh` builds the extension, lays it out as rhun installs it and debugs for real: a Go
+test at the cursor after a prelaunch build task, a Python program reading input in the terminal,
+and a C program. Each workflow is skipped when its tool is missing (dlv or `RHUN_TEST_DLV`; a
+python with debugpy in `RHUN_TEST_PYTHON`; cc and lldb-dap). A tag `vX.Y.Z` equal to `version` in
+`extension.ini` builds Linux, macOS and Windows and publishes what Install from GitHub takes.
