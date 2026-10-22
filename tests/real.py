@@ -8,6 +8,7 @@ a python with debugpy in RHUN_TEST_PYTHON (linked as the project's .venv), cc an
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -160,8 +161,12 @@ class Real(unittest.TestCase):
                                          'wait-term name?', 'type rhun', 'key Return', 'wait-term hello rhun',
                                          'wait-debug ended 30000', 'print-term', 'print-debug'])
         self.assertTrue(any('hello rhun' in l for l in out), out)
-        # the program ran in the project's environment (lines wrap at the terminal's width)
-        self.assertIn('hello rhun ' + str(Path(os.path.realpath(venv)) / 'python'), ''.join(out))
+        # the program ran in the project's environment: sys.executable is in .venv/bin, as Linux
+        # prints it, or where .venv links to, as macOS resolves it (lines wrap at the terminal's
+        # width)
+        m = re.search(r'hello rhun (\S*?/bin/)python', ''.join(out))
+        self.assertTrue(m, out)
+        self.assertEqual(os.path.realpath(m.group(1)), os.path.realpath(venv), out)
         self.assertEqual(self.field(self.sessions(out)[0], 'exit'), '0', out)
 
     @unittest.skipUnless(tool_lldb(), 'needs cc and lldb-dap')
